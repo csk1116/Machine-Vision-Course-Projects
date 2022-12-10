@@ -1,0 +1,277 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+
+<html>
+
+<!-- ************** HEADER INFORMATION ************-->
+
+<head>
+<META name="Description" content="Sharpening images with the Laplacian operator.">
+<META name="Author" content="David W. Fanning, Ph.D.">
+<META name="Keywords" content="IDL, image processing, image sharpening, Laplacian, kernel, convolution">
+<META http-equiv="content-type" content="text/html; charset=iso-8859-1">
+<LINK rel="stylesheet" type="text/css" href="../style.css">
+<LINK rel="stylesheet" type="text/css" href="../print.css" media="print">
+<title>Image Sharpening with a Laplacian Kernel</title>
+</head>
+
+
+<!-- ************** BODY ************-->
+<BODY VLINK="#FF0000" BACKGROUND="../images/graymarble.gif">
+
+
+<!-- ************** CONSULTING BANNER ************-->
+<DIV ID=banner2010><IMG SRC="../images/banner2010.png" ALT="Fanning Software Consulting"></DIV>
+
+<DIV ID="content">
+<CENTER><h1>Image Sharpening with a Laplacian Kernel</h1></CENTER>
+
+<p> <b>QUESTION:</B> I'd like to see more fine detail in my image. Someone told
+me of a technique called "image sharpening" that may be the answer to my prayers.
+They say I need to use a Laplacian operator. What in the world is that? And is there
+any chance I can do this in IDL?</P>
+
+<!-- ************** HORIZONTAL RULE IMAGE ************-->
+<P><IMG SRC="../images/hruler.gif" WIDTH="100%" HEIGHT=3 ALT=""></P>
+
+<p><B> ANSWER:</B> Your friend has probably been reading the excellent book, 
+<a href="http://www.amazon.com/exec/obidos/ASIN/0201180758/coysguitoidlp">
+<em>Digital Image Processing, Second Edition</EM></A> by Gonzales and Woods. It is a
+book well worth picking up if you plan to do any image processing in IDL. And, yes, 
+you can do this kind of thing in IDL. Let me show you how.</P>
+
+<p>Image sharpening falls into a category of image processing called <em>spacial filtering</em>.
+One can take advantage of how quickly or abruptly gray-scale values or colors change from one
+pixel to the next. First order operators (using first derivative measurements) are particularly
+good at finding edges in images. The <b>Sobel</b> and <b>Roberts</b> edge enhancement operators in IDL 
+are examples of these first order filters, sometimes called <em>gradient filters</em>. </P>
+
+<p>The Laplacian operator is an example of a second order or second derivative method of
+enhancement. It is particularly good at finding the fine detail in an image. Any feature
+with a sharp discontinuity (like noise, unfortunately) will be enhanced by a Laplacian operator.
+Thus, one application of a Laplacian operator is to restore fine detail to an image which has
+been smoothed to remove noise. (The median operator is often used to remove noise in an image.)</P>
+
+<p>Consider the original 2D byte value image below, which is provided courtesy of NASA. This view of the 
+Moon's north pole is a mosaic assembled from 18 images
+taken by Galileo's imaging system as the 
+spacecraft flew by on December 7, 1992.
+The same image is found on page 130 of Gonzalez and Woods.</P>
+
+<!-- ************** GRAPHIC EXAMPLE ************-->
+
+<P><A HREF="sharpen_1.jpg"><IMG SRC="sharpen_1.jpg" 
+ALT="The original moon image."></A>
+
+<p>The Laplacian operator is implemented in IDL as a convolution between
+an image and a kernel. The <b>Convol</b> function is used to perform the
+convolution. The Laplacian kernel can be constructed in various ways, but
+we will use the same 3-by-3 kernel used by Gonzalez and Woods, and shown
+in the figure below.</P>
+
+<P><A HREF="sharpen_2.jpg"><IMG SRC="sharpen_2.jpg" 
+ALT="The Laplacian kernel."></A>
+
+<p>In image convolution, the kernel is centered on each pixel in turn, and the
+pixel value is replaced by the sum of the kernel mutipled by the image values.
+In the particular kernel we are using here, we are counting the contributions
+of the diagonal pixels as well as the orthogonal pixels in the filter operation.
+This is not always necessary or desirable, although it works well here.</P>
+
+<p> The Laplacian kernel is constructed in IDL like this:</P>
+
+<PRE>
+   IDL> kernel = Replicate(-1, 3, 3)
+   IDL> kernel[1,1] = 8
+   IDL> Print, kernel
+       -1       -1       -1
+       -1        8       -1
+       -1       -1       -1
+</PRE>
+
+<p>We apply the convolution kernel to the image and display the filtered image
+like this:</P>
+
+<PRE>
+   IDL> filtered = Convol(image, kernel, Center=1)
+   IDL> TV, filtered
+</PRE>
+
+<p> The results are shown in the figure below.</P>
+
+<P><A HREF="sharpen_3.jpg"><IMG SRC="sharpen_3.jpg" 
+ALT="The image filtered with the Laplacian kernel."></A></P>
+
+<P>Note the amount of fine detail found in the image with this filter.
+What we want to do is add this information back into the original image
+in order to sharpen the image. To do this properly, we have to scale
+the filtered data into the same 0 to 255 values of the original image.</P>
+
+<P>It took me a while to understand this step in Gonzales and Woods.
+Part of the problem is that the <b>Convol</b> function retains the
+same data type as the original image. But a true convolution with
+this kernal can result in negative image values. We are discarding
+such values when we displayed the filtered image, above. The proper
+way to do the convolution is to make both the filter and the image
+integer values. Then the filter can be scaled by subtracting the
+minimum value of the filter from the results, and then multiplying
+by 255 and dividing by the maximum value of the filter after the
+minimum value has been added to it. The code looks like this.</P>
+
+<PRE>
+   IDL> filtered = Convol(Fix(image), kernel, Center=1)
+   IDL> filtered = filtered - Min(filtered)
+   IDL> filtered = filtered * (255.0/Max(filtered))
+   IDL> TV, filtered
+</PRE>
+
+<p>Note the use of "255.0" in the expression above. If I used a "255"
+I would be doing integer division and the result would undoubtably be
+a zero, not what I expect. One side effect of this is that the filtered
+image is now a floating point array, even though it is scaled in the range
+of 0 to 255. (The <b>TV</b> command converts the floating point array to byte values
+before it is displayed.) </P>
+
+<p>You see the scaled filter results in the figure below.</P>
+
+<P><A HREF="sharpen_4.jpg"><IMG SRC="sharpen_4.jpg" 
+ALT="The image filtered with the Laplacian kernel and scaled."></A></P>
+
+<p>Now, to complete the image sharpening I have to add the filtered
+Laplacian image back to the original image, and scale the data
+into the range 0 to 255. Here is the code.</P>
+
+<PRE>
+   IDL> sharpened = image + filtered
+   IDL> sharpened = sharpened - Min(sharpened )
+   IDL> sharpened = sharpened * (255.0/Max(sharpened ))
+   IDL> TV, sharpened 
+</PRE>
+
+<p>The sharpened image is shown below. Note the presence of more
+fine detail in the image.</P>
+
+<P><A HREF="sharpen_5.jpg"><IMG SRC="sharpen_5.jpg" 
+ALT="The Laplacian sharpened image."></A></P>
+
+<p>The sharpened image is quite a bit lighter than the same image
+shown in Gonzales and Woods. But I think this is because the image
+doesn't have the same dynamic gray-scale range as the original image.
+A quick histogram stretch (done with <A HREF="../programs/cgstretch.pro"> cgStretch</A>)
+quickly puts things right. By stretching the image between the values 60 and 200,
+we come up with the final image, shown below beside the original image.</P>
+
+<PRE>
+   IDL> TV, BytScl(sharpened, Min=60, Max=200)
+</PRE>
+
+<P><A HREF="sharpen_1.jpg"><IMG SRC="sharpen_1.jpg" 
+ALT="The original moon image."></A>
+<A HREF="sharpen_6.jpg"><IMG SRC="sharpen_6.jpg" 
+ALT="The final Laplacian sharpened image stretched to a different dynamic gray-scale range."></A></P>
+
+<P> If you would like to try Laplacian sharpening with your own image, you
+can use the <A HREF="../programs/sharpen.pro">
+Sharpen</a> program. Rather than stretching the image as above, the 
+<B>Sharpen </B>program matches the histogram of the sharpened image to 
+the histogram of the original image with the <A HREF="../programs/histomatch.pro">
+Histomatch</a> program. You would use it like this to obtain a sharpened image.</P>
+
+<PRE>
+   IDL> sharpenedImage = Sharpen(image)
+</PRE>
+
+<P>If you would like to see the intermediate steps, set the <b>Display</b> keyword.</P>
+
+<PRE>
+   IDL> sharpenedImage = Sharpen(image, /Display)
+</PRE>
+
+<!-- ************** HORIZONTAL RULE IMAGE ************-->
+<P><IMG SRC="../images/hruler.gif" WIDTH="100%" HEIGHT=3 ALT=""></P>
+
+
+
+<!-- SiteSearch Google -->
+<CENTER>
+<form method="get" action="http://www.google.com/custom" target="_top">
+<table border="0" bgcolor="#ffffff">
+<tr><td nowrap="nowrap" valign="top" align="left" height="32">
+<a href="http://www.google.com/">
+<img src="http://www.google.com/logos/Logo_25wht.gif"
+border="0" alt="Google"></a>
+</td>
+<td nowrap="nowrap">
+<input type="hidden" name="domains" value="www.idlcoyote.com">
+<input type="text" name="q" size="50" maxlength="255" value="">
+<input type="submit" name="sa" value="Search">
+</td></tr>
+<tr>
+<td>&nbsp;</td>
+<td nowrap="nowrap">
+<table>
+<tr>
+<td>
+<input type="radio" name="sitesearch" value="" >
+<font size="-1" color="#000000">Web</font>
+</td>
+<td>
+<input type="radio" name="sitesearch" value="www.idlcoyote.com" checked="checked">
+<font size="-1" color="#000000">Coyote's Guide to IDL Programming</font>
+</td>
+</tr>
+</table>
+<input type="hidden" name="client" value="pub-4950613798455670">
+<input type="hidden" name="forid" value="1">
+<input type="hidden" name="ie" value="ISO-8859-1">
+<input type="hidden" name="oe" value="ISO-8859-1">
+<input type="hidden" name="cof" value="GALT:#008000;GL:1;DIV:#336699;VLC:663399;AH:center;BGC:FFFFFF;LBGC:336699;ALC:0000FF;LC:0000FF;T:000000;GFNT:0000FF;GIMP:0000FF;FORID:1;">
+<input type="hidden" name="hl" value="en">
+
+</td></tr></table>
+</form>
+</CENTER>
+<!-- SiteSearch Google -->
+
+<!-- ************** UPDATE NOTICE ************-->
+<DIV ID="copyright">
+<P><CENTER>
+[Return to <A HREF="../documents/tips.html#Contents">IDL Programming Tips</A>]<BR>
+Copyright &copy; 2006 David W. Fanning<BR>
+Last Updated 11 January 2006</CENTER>
+</DIV>
+
+</DIV> <!-- End of CONTENT Division -->
+
+<!-- Start of StatCounter Code -->
+<script type="text/javascript" language="javascript">
+var sc_project=691464; 
+var sc_partition=5; 
+var sc_security="424a63ef"; 
+var sc_invisible=1; 
+</script>
+<script type="text/javascript" language="javascript" src="http://www.statcounter.com/counter/counter.js"></script><noscript><a href="http://www.statcounter.com/" target="_blank"><img  src="http://c6.statcounter.com/counter.php?sc_project=691464&amp;java=0&amp;security=424a63ef&amp;invisible=1" alt="cool hit counter" border="0"></a> </noscript>
+<!-- End of StatCounter Code -->
+
+<!-- Start of Goggle Ads -->
+<DIV ID="sidepanel">
+<script type="text/javascript"><!--
+google_ad_client = "pub-4950613798455670";
+google_ad_width = 120;
+google_ad_height = 600;
+google_ad_format = "120x600_as";
+google_ad_type = "text";
+google_ad_channel ="";
+google_color_border = "336699";
+google_color_bg = "FFFFFF";
+google_color_link = "0000FF";
+google_color_url = "008000";
+google_color_text = "000000";
+//--></script>
+<script type="text/javascript"
+  src="http://pagead2.googlesyndication.com/pagead/show_ads.js">
+</script></DIV>
+<!-- End of Goggle Ads -->
+
+
+</body>
+</html>
